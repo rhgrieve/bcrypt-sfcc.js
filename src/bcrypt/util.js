@@ -1,13 +1,3 @@
-/**
- * Continues with the callback on the next tick.
- * @function
- * @param {function(...[*])} callback Callback to execute
- * @inner
- */
-var nextTick = typeof process !== 'undefined' && process && typeof process.nextTick === 'function'
-    ? (typeof setImmediate === 'function' ? setImmediate : process.nextTick)
-    : setTimeout;
-
 //? include("util/utf8.js");
 
 /**
@@ -19,6 +9,4 @@ var nextTick = typeof process !== 'undefined' && process && typeof process.nextT
  */
 var stringToBytes = utf8Array;
 
-//? include("util/base64.js");
-
-Date.now = Date.now || function() { return +new Date; };
+// //? include("util/base64.js");

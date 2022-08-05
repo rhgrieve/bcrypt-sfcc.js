@@ -33,17 +33,18 @@
   "browser": "dist/bcrypt.js",
   "dependencies": {},
   "devDependencies": {
-    "bcrypt": "latest",
-    "closurecompiler": "~1",
-    "metascript": "~1.0.0",
-    "testjs": "~1"
+    "bcrypt": "^5.0.1",
+    "google-closure-compiler": "^20220719.0.0",
+    "metascript": "^1.0.0",
+    "mocha": "^10.0.0",
+    "proxyquire": "^2.1.3"
   },
   "license": "MIT",
   "scripts": {
-    "test": "node node_modules/testjs/bin/testjs",
+    "test": "npx mocha tests/suite.js",
     "build": "node scripts/build.js",
-    "compile": "node node_modules/closurecompiler/bin/ccjs dist/bcrypt.js --compilation_level=SIMPLE_OPTIMIZATIONS --create_source_map=dist/bcrypt.min.map > dist/bcrypt.min.js",
+    "compile": "npx google-closure-compiler --js=dist/bcrypt.js --js_output_file=dist/bcrypt.min.js --compilation_level=SIMPLE --create_source_map=dist/bcrypt.min.map",
     "compress": "gzip -c -9 dist/bcrypt.min.js > dist/bcrypt.min.js.gz",
-    "make": "npm run build && npm run compile && npm run compress && npm test"
+    "make": "npm run build && npm run compile && npm run compress && npm run test"
   }
 }

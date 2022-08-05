@@ -1,3 +1,5 @@
+var System = require("dw/system/System");
+
 /**
  * @type {number}
  * @const
@@ -485,27 +487,19 @@ function _crypt(b, salt, rounds, callback, progressCallback) {
 
     // Validate
     if (rounds < 4 || rounds > 31) {
-        err = Error("Illegal number of rounds (4-31): "+rounds);
-        if (callback) {
-            nextTick(callback.bind(this, err));
-            return;
-        } else
-            throw err;
+        throw Error("Illegal number of rounds (4-31): "+rounds);;
     }
     if (salt.length !== BCRYPT_SALT_LEN) {
-        err =Error("Illegal salt length: "+salt.length+" != "+BCRYPT_SALT_LEN);
-        if (callback) {
-            nextTick(callback.bind(this, err));
-            return;
-        } else
-            throw err;
+        throw Error("Illegal salt length: "+salt.length+" != "+BCRYPT_SALT_LEN);
     }
     rounds = (1 << rounds) >>> 0;
 
     var P, S, i = 0, j;
 
     //Use typed arrays when available - huge speedup!
-    if (Int32Array) {
+    // SFCC only supports Int32Array from compatibility version 21.2
+    // If it's not available then we just copy the array
+    if (System.compatibilityMode >= 2102) {
         P = new Int32Array(P_ORIG);
         S = new Int32Array(S_ORIG);
     } else {
@@ -548,8 +542,6 @@ function _crypt(b, salt, rounds, callback, progressCallback) {
             } else
                 return ret;
         }
-        if (callback)
-            nextTick(next);
     }
 
     // Async
@@ -578,25 +570,13 @@ function _crypt(b, salt, rounds, callback, progressCallback) {
 function _hash(s, salt, callback, progressCallback) {
     var err;
     if (typeof s !== 'string' || typeof salt !== 'string') {
-        err = Error("Invalid string / salt: Not a string");
-        if (callback) {
-            nextTick(callback.bind(this, err));
-            return;
-        }
-        else
-            throw err;
+        throw Error("Invalid string / salt: Not a string");
     }
 
     // Validate the salt
     var minor, offset;
     if (salt.charAt(0) !== '$' || salt.charAt(1) !== '2') {
-        err = Error("Invalid salt version: "+salt.substring(0,2));
-        if (callback) {
-            nextTick(callback.bind(this, err));
-            return;
-        }
-        else
-            throw err;
+        throw Error("Invalid salt version: "+salt.substring(0,2));
     }
     if (salt.charAt(2) === '$')
         minor = String.fromCharCode(0),
@@ -604,24 +584,14 @@ function _hash(s, salt, callback, progressCallback) {
     else {
         minor = salt.charAt(2);
         if ((minor !== 'a' && minor !== 'b' && minor !== 'y') || salt.charAt(3) !== '$') {
-            err = Error("Invalid salt revision: "+salt.substring(2,4));
-            if (callback) {
-                nextTick(callback.bind(this, err));
-                return;
-            } else
-                throw err;
+            throw Error("Invalid salt revision: "+salt.substring(2,4));
         }
         offset = 4;
     }
 
     // Extract number of rounds
     if (salt.charAt(offset + 2) > '$') {
-        err = Error("Missing salt rounds");
-        if (callback) {
-            nextTick(callback.bind(this, err));
-            return;
-        } else
-            throw err;
+        throw Error("Missing salt rounds");
     }
     var r1 = parseInt(salt.substring(offset, offset + 1), 10) * 10,
         r2 = parseInt(salt.substring(offset + 1, offset + 2), 10),
@@ -653,17 +623,5 @@ function _hash(s, salt, callback, progressCallback) {
         return res.join('');
     }
 
-    // Sync
-    if (typeof callback == 'undefined')
-        return finish(_crypt(passwordb, saltb, rounds));
-
-    // Async
-    else {
-        _crypt(passwordb, saltb, rounds, function(err, bytes) {
-            if (err)
-                callback(err, null);
-            else
-                callback(null, finish(bytes));
-        }, progressCallback);
-    }
+    return finish(_crypt(passwordb, saltb, rounds));
 }

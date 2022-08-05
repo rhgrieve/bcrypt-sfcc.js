@@ -1,15 +1,10 @@
+var SecureRandom = require('dw/crypto/SecureRandom');
+
 /**
  * bcrypt namespace.
  * @type {Object.<string,*>}
  */
 var bcrypt = {};
-
-/**
- * The random implementation to use as a fallback.
- * @type {?function(number):!Array.<number>}
- * @inner
- */
-var randomFallback = null;
 
 /**
  * Generates cryptographically secure random bytes.
@@ -20,45 +15,10 @@ var randomFallback = null;
  * @inner
  */
 function random(len) {
-    /* node */ if (typeof module !== 'undefined' && module && module['exports'])
-        try {
-            return require("crypto")['randomBytes'](len);
-        } catch (e) {}
-    /* WCA */ try {
-        var a; (self['crypto']||self['msCrypto'])['getRandomValues'](a = new Uint32Array(len));
-        return Array.prototype.slice.call(a);
-    } catch (e) {}
-    /* fallback */ if (!randomFallback)
-        throw Error("Neither WebCryptoAPI nor a crypto module is available. Use bcrypt.setRandomFallback to set an alternative");
-    return randomFallback(len);
+    // We use dw.crypto.SecureRandom to provide a source of randomness
+    var random = new SecureRandom();
+    return random.nextBytes(len);
 }
-
-// Test if any secure randomness source is available
-var randomAvailable = false;
-try {
-    random(1);
-    randomAvailable = true;
-} catch (e) {}
-
-// Default fallback, if any
-randomFallback = /*? if (ISAAC) { */function(len) {
-    for (var a=[], i=0; i<len; ++i)
-        a[i] = ((0.5 + isaac() * 2.3283064365386963e-10) * 256) | 0;
-    return a;
-};/*? } else { */null;/*? }*/
-
-/**
- * Sets the pseudo random number generator to use as a fallback if neither node's `crypto` module nor the Web Crypto
- *  API is available. Please note: It is highly important that the PRNG used is cryptographically secure and that it
- *  is seeded properly!
- * @param {?function(number):!Array.<number>} random Function taking the number of bytes to generate as its
- *  sole argument, returning the corresponding array of cryptographically secure random byte values.
- * @see http://nodejs.org/api/crypto.html
- * @see http://www.w3.org/TR/WebCryptoAPI/
- */
-bcrypt.setRandomFallback = function(random) {
-    randomFallback = random;
-};
 
 /**
  * Synchronously generates a salt.
@@ -86,52 +46,6 @@ bcrypt.genSaltSync = function(rounds, seed_length) {
 };
 
 /**
- * Asynchronously generates a salt.
- * @param {(number|function(Error, string=))=} rounds Number of rounds to use, defaults to 10 if omitted
- * @param {(number|function(Error, string=))=} seed_length Not supported.
- * @param {function(Error, string=)=} callback Callback receiving the error, if any, and the resulting salt
- * @returns {!Promise} If `callback` has been omitted
- * @throws {Error} If `callback` is present but not a function
- */
-bcrypt.genSalt = function(rounds, seed_length, callback) {
-    if (typeof seed_length === 'function')
-        callback = seed_length,
-        seed_length = undefined; // Not supported.
-    if (typeof rounds === 'function')
-        callback = rounds,
-        rounds = undefined;
-    if (typeof rounds === 'undefined')
-        rounds = GENSALT_DEFAULT_LOG2_ROUNDS;
-    else if (typeof rounds !== 'number')
-        throw Error("illegal arguments: "+(typeof rounds));
-
-    function _async(callback) {
-        nextTick(function() { // Pretty thin, but salting is fast enough
-            try {
-                callback(null, bcrypt.genSaltSync(rounds));
-            } catch (err) {
-                callback(err);
-            }
-        });
-    }
-
-    if (callback) {
-        if (typeof callback !== 'function')
-            throw Error("Illegal callback: "+typeof(callback));
-        _async(callback);
-    } else
-        return new Promise(function(resolve, reject) {
-            _async(function(err, res) {
-                if (err) {
-                    reject(err);
-                    return;
-                }
-                resolve(res);
-            });
-        });
-};
-
-/**
  * Synchronously generates a hash for the given string.
  * @param {string} s String to hash
  * @param {(number|string)=} salt Salt length to generate or salt to use, default to 10
@@ -145,45 +59,6 @@ bcrypt.hashSync = function(s, salt) {
     if (typeof s !== 'string' || typeof salt !== 'string')
         throw Error("Illegal arguments: "+(typeof s)+', '+(typeof salt));
     return _hash(s, salt);
-};
-
-/**
- * Asynchronously generates a hash for the given string.
- * @param {string} s String to hash
- * @param {number|string} salt Salt length to generate or salt to use
- * @param {function(Error, string=)=} callback Callback receiving the error, if any, and the resulting hash
- * @param {function(number)=} progressCallback Callback successively called with the percentage of rounds completed
- *  (0.0 - 1.0), maximally once per `MAX_EXECUTION_TIME = 100` ms.
- * @returns {!Promise} If `callback` has been omitted
- * @throws {Error} If `callback` is present but not a function
- */
-bcrypt.hash = function(s, salt, callback, progressCallback) {
-
-    function _async(callback) {
-        if (typeof s === 'string' && typeof salt === 'number')
-            bcrypt.genSalt(salt, function(err, salt) {
-                _hash(s, salt, callback, progressCallback);
-            });
-        else if (typeof s === 'string' && typeof salt === 'string')
-            _hash(s, salt, callback, progressCallback);
-        else
-            nextTick(callback.bind(this, Error("Illegal arguments: "+(typeof s)+', '+(typeof salt))));
-    }
-
-    if (callback) {
-        if (typeof callback !== 'function')
-            throw Error("Illegal callback: "+typeof(callback));
-        _async(callback);
-    } else
-        return new Promise(function(resolve, reject) {
-            _async(function(err, res) {
-                if (err) {
-                    reject(err);
-                    return;
-                }
-                resolve(res);
-            });
-        });
 };
 
 /**
@@ -214,51 +89,6 @@ bcrypt.compareSync = function(s, hash) {
     if (hash.length !== 60)
         return false;
     return safeStringCompare(bcrypt.hashSync(s, hash.substr(0, hash.length-31)), hash);
-};
-
-/**
- * Asynchronously compares the given data against the given hash.
- * @param {string} s Data to compare
- * @param {string} hash Data to be compared to
- * @param {function(Error, boolean)=} callback Callback receiving the error, if any, otherwise the result
- * @param {function(number)=} progressCallback Callback successively called with the percentage of rounds completed
- *  (0.0 - 1.0), maximally once per `MAX_EXECUTION_TIME = 100` ms.
- * @returns {!Promise} If `callback` has been omitted
- * @throws {Error} If `callback` is present but not a function
- */
-bcrypt.compare = function(s, hash, callback, progressCallback) {
-
-    function _async(callback) {
-        if (typeof s !== "string" || typeof hash !== "string") {
-            nextTick(callback.bind(this, Error("Illegal arguments: "+(typeof s)+', '+(typeof hash))));
-            return;
-        }
-        if (hash.length !== 60) {
-            nextTick(callback.bind(this, null, false));
-            return;
-        }
-        bcrypt.hash(s, hash.substr(0, 29), function(err, comp) {
-            if (err)
-                callback(err);
-            else
-                callback(null, safeStringCompare(comp, hash));
-        }, progressCallback);
-    }
-
-    if (callback) {
-        if (typeof callback !== 'function')
-            throw Error("Illegal callback: "+typeof(callback));
-        _async(callback);
-    } else
-        return new Promise(function(resolve, reject) {
-            _async(function(err, res) {
-                if (err) {
-                    reject(err);
-                    return;
-                }
-                resolve(res);
-            });
-        });
 };
 
 /**

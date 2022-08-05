@@ -1,5 +1,7 @@
 // A base64 implementation for the bcrypt algorithm. This is partly non-standard.
 
+var Bytes = require('dw/util/Bytes');
+
 /**
  * bcrypt's own non-standard base64 dictionary.
  * @type {!Array.<string>}
@@ -42,14 +44,14 @@ function base64_encode(b, len) {
     if (len <= 0 || len > b.length)
         throw Error("Illegal len: "+len);
     while (off < len) {
-        c1 = b[off++] & 0xff;
+        c1 = (b instanceof Bytes ? b.byteAt(off++) : b[off++]) & 0xff;
         rs.push(BASE64_CODE[(c1 >> 2) & 0x3f]);
         c1 = (c1 & 0x03) << 4;
         if (off >= len) {
             rs.push(BASE64_CODE[c1 & 0x3f]);
             break;
         }
-        c2 = b[off++] & 0xff;
+        c2 = (b instanceof Bytes ? b.byteAt(off++) : b[off++]) & 0xff;
         c1 |= (c2 >> 4) & 0x0f;
         rs.push(BASE64_CODE[c1 & 0x3f]);
         c1 = (c2 & 0x0f) << 2;
@@ -57,7 +59,7 @@ function base64_encode(b, len) {
             rs.push(BASE64_CODE[c1 & 0x3f]);
             break;
         }
-        c2 = b[off++] & 0xff;
+        c2 = (b instanceof Bytes ? b.byteAt(off++) : b[off++]) & 0xff;
         c1 |= (c2 >> 6) & 0x03;
         rs.push(BASE64_CODE[c1 & 0x3f]);
         rs.push(BASE64_CODE[c2 & 0x3f]);
